@@ -109,37 +109,30 @@ def build():
                     ['/bin/bash', '-c', command], preexec_fn=applicator._pre_exec
                 )
 
-def start():
-    #Enable additional actions in the future
-    applicators = [apply_start]
-
-    for applicator in applicators:
-        commands = applicator()
-
-        if commands:
-            for command in commands:
-                subprocess.check_call(
-                    ['/bin/bash', '-c', command], preexec_fn=applicator._pre_exec
-                )
-
 @become(NB_UID)
-def apply_start():
+def start(args):
     st_path = binder_path('start')
 
     if os.path.exists(st_path):
-        return [
-            f'chmod +x {st_path}',
-            # since pb_path is a fully qualified path, no need to add a ./
-            f'{st_path}'
-        ]
+        subprocess.check_call(['chmod', '+x', st_path])
     else:
-        return [f'/usr/local/bin/repo2docker-entrypoint']
+        st_path = '/usr/local/bin/repo2docker-entrypoint'
+
+    os.execv(st_path, [st_path] + args)
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument(
-        'action',
-        choices=('build', 'start')
+    subparsers = argparser.add_subparsers(dest='action')
+
+    build_parser = subparsers.add_parser('build')
+
+    start_parser = subparsers.add_parser('start')
+    start_parser.add_argument(
+        'args',
+        # We want REMAINDER instead '*' here so argparse passes through args starting with '-'
+        # Without this, if you try to do `r2d_overlay.py start /bin/bash -c "echo hi"`
+        # will fail, since argparse will try to parse the '-c'
+        nargs=argparse.REMAINDER
     )
 
     args = argparser.parse_args()
@@ -147,7 +140,7 @@ def main():
     if args.action == 'build':
         build()
     elif args.action == 'start':
-        start()
+        start(args.args)
 
 
 if __name__ == '__main__':
