@@ -109,20 +109,39 @@ def build():
                     ['/bin/bash', '-c', command], preexec_fn=applicator._pre_exec
                 )
 
+@become(NB_UID)
+def start(args):
+    st_path = binder_path('start')
+
+    if os.path.exists(st_path):
+        subprocess.check_call(['chmod', '+x', st_path])
+    else:
+        st_path = '/usr/local/bin/repo2docker-entrypoint'
+
+    os.execv(st_path, [st_path] + args)
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument(
-        'action',
-        choices=('build', 'start')
+    subparsers = argparser.add_subparsers(dest='action')
+
+    build_parser = subparsers.add_parser('build')
+
+    start_parser = subparsers.add_parser('start')
+    start_parser.add_argument(
+        'args',
+        # We want REMAINDER instead '*' here so argparse passes through args starting with '-'
+        # Without this, if you try to do `r2d_overlay.py start /bin/bash -c "echo hi"`
+        # will fail, since argparse will try to parse the '-c'
+        nargs=argparse.REMAINDER
     )
 
     args = argparser.parse_args()
 
     if args.action == 'build':
         build()
-    else:
-        raise Exception("start isn't implemented yet")
+    elif args.action == 'start':
+        start(args.args)
+
 
 if __name__ == '__main__':
     main()
